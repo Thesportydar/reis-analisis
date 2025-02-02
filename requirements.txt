@@ -1,0 +1,9 @@
+distinctipy
+nltk
+pandas
+python-docx
+python-dotenv
+sentence-transformers
+wordcloud
+redis
+requests
