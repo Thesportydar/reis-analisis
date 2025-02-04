@@ -35,24 +35,24 @@ class QuestionClusterer:
             for i in range(nrefs):
                 # Create new random reference set
                 randomReference = np.random.random_sample(size=data.shape)
-      
+
                 # Fit to it
                 km = KMeans(k)
                 km.fit(randomReference)
-      
+
                 refDisp = km.inertia_
                 refDisps[i] = refDisp
-      
+
                 # Fit cluster to original data and create dispersion
                 km = KMeans(k)
                 km.fit(data)
-      
+
                 origDisp = km.inertia_# Calculate gap statistic
                 gap = np.log(np.mean(refDisps)) - np.log(origDisp)# Assign this loop's gap statistic to gaps
                 gaps[gap_index] = gap
-      
+
                 resultsdf.append([k,gap])
-      
+
                 df_extended = pd.DataFrame(resultsdf, columns=['clusterCount', 'gap'])
 
         return (gaps.argmax() + 1, df_extended)

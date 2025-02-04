@@ -158,6 +158,7 @@ class ReportGenerator:
         for i in range(1, self.num_clusters+1):
             df_c = self.df_info_reis_pregs.loc[self.df_info_reis_pregs['cluster'] == i]
 
+            # si un cluster no tiene preguntas, se salta y continua con el siguiente
             if df_c.empty:
                 continue
 
@@ -174,6 +175,7 @@ class ReportGenerator:
             # Generate a word cloud image
             joined_string = ' '.join(df_c['pregunta'].astype(str))
 
+            # WARNING: si todas las palabras son stopwords lanza un error
             wordcloud = WordCloud(stopwords=self.stopwords, background_color="white").generate(joined_string)
             wordcloud.to_file("image.png") # Save the image to a file
 
@@ -210,6 +212,7 @@ class ReportGenerator:
         all_text = ""
 
         for i in range(1, self.num_clusters+1):
+            # si un cluster no tiene preguntas, se salta y continua con el siguiente
             if self.df_info_reis_pregs.loc[self.df_info_reis_pregs['cluster'] == i].empty:
                 continue
 

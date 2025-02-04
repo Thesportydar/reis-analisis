@@ -50,7 +50,11 @@ def process_task(task):
         logging.info(f"Task for class_id: {class_id} completed")
 
     except Exception as e:
-        r.set(f"task_status:{class_id}", json.dumps({"status": "failed", "error": str(e)}))
+        r.set(
+            f"task_status:{class_id}",
+            json.dumps({"status": "failed", "error": str(e)}),
+            ex=900 # 15 minutos
+        )
         raise
 
 if __name__ == '__main__':
@@ -74,9 +78,11 @@ if __name__ == '__main__':
 
         except Exception as e:
             logging.error(f"Error procesando tarea: {e}")
-            send_single_email(
-                os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
-                "El Worker de REIS se ha detenido",
-                f"Error procesando tarea: {e}"
-            )
-            exit(1)
+            logging.exception(e)
+            continue
+            # send_single_email(
+                # os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
+                # "El Worker de REIS se ha detenido",
+                # f"Error procesando tarea: {e}"
+            # )
+            # exit(1)
