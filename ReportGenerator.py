@@ -320,7 +320,7 @@ class ReportGenerator:
             cursor.execute(query, (report_id, self.period, original_name, download_url, mime, score))
             conn.commit()
 
-        return {'file_name': original_name, 'file_path': save_path, 'download_url': download_url, 'mime': mime, 'score': score}
+        return {'file_name': original_name, 'file_path': save_path, 'download_url': download_url, 'mime': mime}
 
 
     def generate_report(self):

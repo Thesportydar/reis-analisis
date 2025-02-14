@@ -44,8 +44,7 @@ def process_task(task):
         r.set(f"task_status:{class_id}", json.dumps({
                 "status": "completed",
                 "download_url": result['download_url'],
-                "file_name": result['file_name'],
-                "score": result['score']
+                "file_name": result['file_name']
         }))
         logging.info(f"Task for class_id: {class_id} completed")
 
