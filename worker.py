@@ -81,7 +81,7 @@ if __name__ == '__main__':
             continue
             # send_single_email(
                 # os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
-                # "El Worker de REIS se ha detenido",
+                # "El Worker de REI se ha detenido",
                 # f"Error procesando tarea: {e}"
             # )
             # exit(1)

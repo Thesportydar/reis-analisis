@@ -42,7 +42,7 @@ def main(rei_id, period, email, score=0):
     try:
         send_email_with_attachment(
             email,
-            f"REIS: Reporte Recorrido {rei_id} Clase {period}",
+            f"REI: Reporte Recorrido {rei_id} Clase {period}",
             "Reporte generado por el sistema REI",
             report.get('file_path', ''),
             report.get('file_name', '')

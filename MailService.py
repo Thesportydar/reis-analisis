@@ -10,7 +10,7 @@ load_dotenv()
 API_KEY = os.getenv("MAILGUN_API_KEY", '')
 
 MAILGUN_API_URL = "https://api.mailgun.net/v3/reports.inaqui.me/messages"
-FROM_EMAIL_ADDRESS = "REIS <mailgun@reports.inaqui.me>"
+FROM_EMAIL_ADDRESS = "REI <mailgun@reports.inaqui.me>"
 
 def send_single_email(to_address: str, subject: str, message: str):
     try:
