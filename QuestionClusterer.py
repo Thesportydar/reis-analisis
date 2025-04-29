@@ -9,6 +9,9 @@ from statistics import mode
 import os
 from dotenv import load_dotenv
 
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 load_dotenv()
 DB_PATH = os.getenv("DATABASE_URL", "sqlite.db")
@@ -60,25 +63,28 @@ class QuestionClusterer:
 
     def fetch_questions(self, table_name, rei_id, period):
         query = f"""
-            SELECT question, group_id
-            FROM {table_name}
-            LEFT JOIN main.class c on c.id = {table_name}.class_id
-            WHERE class_id = ? AND recorrido_id = ?;
+            SELECT question, coalesce(g.id, 'Desconocido') as group_id, coalesce(u.name, 'Desconocido') as lider_name
+            FROM {table_name} q
+            LEFT JOIN "class" c ON c.id = q.class_id
+            LEFT JOIN "group" g ON g.id = q.group_id
+            LEFT JOIN "user" u ON u.id = g.lider_id
+            WHERE c.id = ? AND c.recorrido_id = ?;
         """
 
         with sqlite3.connect(DB_PATH) as con:
             cursor = con.cursor()
             cursor.execute(query, (period, rei_id))
-            return cursor.fetchall()
+            result = cursor.fetchall()
+            logging.debug(f"Fetched {len(result)} questions from {table_name} for REI ID: {rei_id} and period: {period}")
+            return result
 
 
     def preprocess_questions(self, questions):
         if not questions:
-            return pd.DataFrame(columns=["pregunta", "grupo", "votos"])
+            return pd.DataFrame(columns=["pregunta", "grupo", "lider_name", "votos"])
 
         dfcorpus = pd.DataFrame(questions)
-        dfcorpus = dfcorpus.rename(columns={0: "pregunta"})
-        dfcorpus = dfcorpus.rename(columns={1: "grupo"})
+        dfcorpus = dfcorpus.rename(columns={0: "pregunta", 1: "grupo", 2: "lider_name"})
 
         dfcorpus["votos"] = 1
         corpus = dfcorpus["pregunta"].tolist()
@@ -109,9 +115,6 @@ class QuestionClusterer:
         if len(to_remove)>0:
             rm_indexes = np.array(to_remove)
             dfcorpus = dfcorpus.drop(dfcorpus.index[rm_indexes])
-
-        dfcorpus = dfcorpus.reset_index()
-        del dfcorpus['index']
 
         return dfcorpus
 
@@ -162,38 +165,3 @@ class QuestionClusterer:
         df_info_reis_pregs = dfcorpus
 
         return df_info_reis_pregs
-
-
-    def clusterize_new_questions(self, rei_id, period):
-
-        questions = self.fetch_questions("new_question", rei_id, period)
-        if not questions:
-            return pd.DataFrame(columns=["pregunta", "grupo", "cluster"])
-
-        if not self.clustering_model:
-            raise ValueError("The model has not been trained yet. Call clusterize_dx_questions first.")
-
-        df_info_reis_pregnuevas = pd.DataFrame(questions)
-        df_info_reis_pregnuevas = df_info_reis_pregnuevas.rename(columns={0: "pregunta"})
-        df_info_reis_pregnuevas = df_info_reis_pregnuevas.rename(columns={1: "grupo"})
-
-        nuevas_preg = df_info_reis_pregnuevas['pregunta'].tolist()
-        nuevas_preg_grupo = df_info_reis_pregnuevas['grupo'].tolist()
-
-        asign_clusters = []
-        for p in nuevas_preg:
-            frase_embeddings = self.embedder.encode(p)
-
-            sims = []
-            for i in range(0, self.num_clusters):
-                sim = self.embedder.similarity(self.clustering_model.cluster_centers_[i], frase_embeddings)
-                sims.append(sim)
-
-            val_max = max(sims)
-            pos_max = sims.index(max(sims[::-1]))
-            asign_clusters.append(pos_max)
-
-        asign_clusters = [x + 1 for x in asign_clusters]
-        df_info_reis_pregnuevas['cluster'] = asign_clusters
-
-        return df_info_reis_pregnuevas

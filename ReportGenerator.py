@@ -4,7 +4,6 @@ from docx.oxml.ns import nsdecls
 from docx.oxml import parse_xml
 from wordcloud import WordCloud
 import pandas as pd
-import numpy as np
 import re
 import distinctipy
 
@@ -18,18 +17,21 @@ import uuid
 from Constants import FILE_PREFIX, REPORT_PREFIX
 from dotenv import load_dotenv
 
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 load_dotenv()
 UPLOADS_DIR = os.getenv("UPLOADS_DIR", "/var/lib/reis")
 DB_PATH = os.getenv("DATABASE_URL", "sqlite.db")
 
 
 class ReportGenerator:
-    def __init__(self, rei_id, period, df_info_reis_pregs, df_info_reis_pregnuevas, num_clusters):
+    def __init__(self, rei_id, period, df_info_reis_pregs, num_clusters):
         self.rei_id = rei_id
         self.period = period
         self.df_info_reis_pregs = df_info_reis_pregs
         self.corpus = df_info_reis_pregs['pregunta'].tolist()
-        self.df_info_reis_pregnuevas = df_info_reis_pregnuevas
         self.num_clusters = num_clusters if num_clusters else 0
         self.document = docx.Document()
         self.set_styles()
@@ -156,10 +158,12 @@ class ReportGenerator:
         self.add_heading('Preguntas por temas')
 
         for i in range(1, self.num_clusters+1):
-            df_c = self.df_info_reis_pregs.loc[self.df_info_reis_pregs['cluster'] == i]
+            logging.debug(f"Procesando cluster {i}...")
 
+            df_c = self.df_info_reis_pregs.loc[self.df_info_reis_pregs['cluster'] == i]
             # si un cluster no tiene preguntas, se salta y continua con el siguiente
             if df_c.empty:
+                logging.warning(f"El cluster {i} no tiene preguntas. Se omite.")
                 continue
 
             rgb = self.df_info_reis_clusters.loc[i, 'color']
@@ -174,10 +178,20 @@ class ReportGenerator:
 
             # Generate a word cloud image
             joined_string = ' '.join(df_c['pregunta'].astype(str))
+            logging.debug(f"Texto combinado para cluster {i}: {joined_string}")
 
-            # WARNING: si todas las palabras son stopwords lanza un error
-            wordcloud = WordCloud(stopwords=self.stopwords, background_color="white").generate(joined_string)
-            wordcloud.to_file("image.png") # Save the image to a file
+            if not joined_string.strip():
+                logging.warning(f"El texto para la nube de palabras del cluster {i} está vacío después de combinar.")
+                continue
+
+            try:
+                # WARNING: si todas las palabras son stopwords lanza un error
+                wordcloud = WordCloud(stopwords=self.stopwords, background_color="white").generate(joined_string)
+                wordcloud.to_file("image.png") # Save the image to a file
+                logging.debug(f"Nube de palabras generada para cluster {i} y guardada como 'image.png'.")
+            except ValueError as e:
+                logging.error(f"Error al generar la nube de palabras para cluster {i}: {e}")
+                continue
 
             # Add the word cloud image to the document
             self.document.add_picture('image.png', width=Inches(2.5))
@@ -197,11 +211,10 @@ class ReportGenerator:
             hdr_cells[2]._tc.get_or_add_tcPr().append(shading_elm)
 
             for index, row in df_c.iterrows():
-                #second row
                 row_cells = table.add_row().cells
-
                 row_cells[0].text = str(row['votos'])
-                text_grupos = ReportGenerator.process_string(str(row['grupo']))
+                lider_name = row.get('lider_name', 'Desconocido')
+                text_grupos = ReportGenerator.process_string(str(f'Grupo de {lider_name}'))
                 row_cells[1].text = text_grupos
                 row_cells[2].text = row['pregunta']
 
@@ -254,34 +267,6 @@ class ReportGenerator:
                 row_cells[0]._tc.get_or_add_tcPr().append(shading_elm)
                 row_cells[0].text = str(row['votos'])
                 row_cells[1].text = row['pregunta']
-
-            #nuevas preguntas
-            self.add_heading('Nuevas preguntas', 2)
-            df_c = self.df_info_reis_pregnuevas.loc[self.df_info_reis_pregnuevas['cluster'] == i]
-
-            if df_c['pregunta'].str.strip().eq('').all():
-                self.add_paragraph("No hay nuevas preguntas.")
-            else:
-                table = self.add_table(rows = 1, cols = 2, column_widths = [1.2, 5.8])
-
-                hdr_cells = table.rows[0].cells
-                shading_elm = parse_xml(r'<w:shd {} w:fill="dce3db"/>'.format(nsdecls('w')))
-                hdr_cells[0]._tc.get_or_add_tcPr().append(shading_elm)
-                shading_elm = parse_xml(r'<w:shd {} w:fill="dce3db"/>'.format(nsdecls('w')))
-                hdr_cells[1]._tc.get_or_add_tcPr().append(shading_elm)
-                hdr_cells[0].text = 'Grupo'
-                hdr_cells[1].text = 'Nuevas preguntas'
-
-
-                for index, row in df_c.iterrows():
-                    row_cells = table.add_row().cells
-                    row_cells[0].text = ""
-                    rgb = self.df_info_reis_clusters.loc[i, 'color']
-                    background_color = ReportGenerator.RGBtoHex(rgb,1)
-                    shading_elm = parse_xml(r'<w:shd {} w:fill="{}"/>'.format(nsdecls('w'), background_color))
-                    row_cells[0]._tc.get_or_add_tcPr().append(shading_elm)
-                    row_cells[0].text = str(row['grupo'])
-                    row_cells[1].text = row['pregunta']
 
 
     def save_report(self):
@@ -336,7 +321,6 @@ if __name__ == '__main__':
         rei_id="1234",
         period="2025-01",
         df_info_reis_pregs=pd.DataFrame(),
-        df_info_reis_pregnuevas=pd.DataFrame(),
         num_clusters=5
     )
     generator.generate_report()

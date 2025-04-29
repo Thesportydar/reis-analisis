@@ -3,6 +3,9 @@ from ReportGenerator import ReportGenerator
 import sys
 import json
 from MailService import send_email_with_attachment
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def main(rei_id, period, email, score=0):
@@ -15,12 +18,8 @@ def main(rei_id, period, email, score=0):
     except Exception as e:
         raise Exception(f"Error clusterizando preguntas dx: {str(e)}")
 
-
-    # New questions
-    try:
-        df_info_reis_pregnuevas = clusterer.clusterize_new_questions(rei_id, period)
-    except Exception as e:
-        raise Exception(f"Error clusterizando preguntas nuevas: {str(e)}")
+    logging.debug(f"Preguntas dx clusterizadas correctamente. Total: {len(df_info_reis_pregs)}")
+    logging.debug(f"Preguntas dx clusterizadas: {df_info_reis_pregs}")
 
 
     # Generar reporte
@@ -29,7 +28,6 @@ def main(rei_id, period, email, score=0):
             rei_id,
             period,
             df_info_reis_pregs,
-            df_info_reis_pregnuevas,
             clusterer.num_clusters
         )
         report = report_generator.generate_report()
