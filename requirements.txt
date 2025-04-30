@@ -11,3 +11,4 @@ notebook
 matplotlib
 seaborn
 openpyxl
+umap-learn
