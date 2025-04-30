@@ -34,6 +34,10 @@ Sin embargo, si solo vas a realizar tareas de exploración con las notebooks, no
 ## Uso de las Notebooks
 Para cargar preguntas de ejemplo y trabajar con la base de datos, utiliza la notebook `Load_db`. Si no existe una base de datos, esta notebook creará una por defecto.
 
+Luego de cargar la base de datos se pueden explorar los clusters hechos por humanos y visualizar los embeddings dentro de la notebook `Explore_clusters`.
+
+Para ejecutar el modelo y compararlo con los clusters humanos se encuentra la notebook `full`.
+
 ## Notas Adicionales
 - Asegúrate de que las dependencias estén correctamente instaladas antes de ejecutar cualquier notebook o script.
 - Si tienes dudas sobre la configuración de las variables de entorno, consulta el archivo .env incluido en este submódulo.
