@@ -36,7 +36,7 @@ Para cargar preguntas de ejemplo y trabajar con la base de datos, utiliza la not
 
 Luego de cargar la base de datos se pueden explorar los clusters hechos por humanos y visualizar los embeddings dentro de la notebook `Explore_clusters`.
 
-Para ejecutar el modelo y compararlo con los clusters humanos se encuentra la notebook `full`.
+Para ejecutar el modelo y compararlo con los clusters humanos se encuentra la notebook `ff`.
 
 ## Notas Adicionales
 - Asegúrate de que las dependencias estén correctamente instaladas antes de ejecutar cualquier notebook o script.

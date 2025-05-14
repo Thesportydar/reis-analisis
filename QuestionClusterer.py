@@ -4,6 +4,8 @@ import numpy as np
 
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
+from sklearn.metrics import calinski_harabasz_score
+from umap.umap_ import UMAP
 
 from statistics import mode
 import os
@@ -18,47 +20,22 @@ DB_PATH = os.getenv("DATABASE_URL", "sqlite.db")
 
 class QuestionClusterer:
 
-    def __init__(self, num_clusters, embedder_model="hiiamsid/sentence_similarity_spanish_es"):
+    def __init__(self, num_clusters, embedder_model='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', n_components=10, n_neighbors=15, min_dist=0.1):
         self.embedder = SentenceTransformer(embedder_model)
         self.clustering_model = None
         self.num_clusters = num_clusters if num_clusters else None
+        self.reducer = UMAP(n_components=n_components, n_neighbors=n_neighbors, min_dist=min_dist, metric='cosine', repulsion_strength=1.5)
 
     @staticmethod
-    def optimalK(data, nrefs=3, maxClusters=15):
-        """
-            Gap Statistic for K means
-        """
-        gaps = np.zeros((len(range(1, maxClusters)),))
-        resultsdf = []
-
-        for gap_index, k in enumerate(range(1, maxClusters)):
-            # Holder for reference dispersion results
-            refDisps = np.zeros(nrefs)# For n references, generate random sample and perform kmeans getting resulting dispersion of each loop
-
-            for i in range(nrefs):
-                # Create new random reference set
-                randomReference = np.random.random_sample(size=data.shape)
-
-                # Fit to it
-                km = KMeans(k)
-                km.fit(randomReference)
-
-                refDisp = km.inertia_
-                refDisps[i] = refDisp
-
-                # Fit cluster to original data and create dispersion
-                km = KMeans(k)
-                km.fit(data)
-
-                origDisp = km.inertia_# Calculate gap statistic
-                gap = np.log(np.mean(refDisps)) - np.log(origDisp)# Assign this loop's gap statistic to gaps
-                gaps[gap_index] = gap
-
-                resultsdf.append([k,gap])
-
-                df_extended = pd.DataFrame(resultsdf, columns=['clusterCount', 'gap'])
-
-        return (gaps.argmax() + 1, df_extended)
+    def select_k(embeddings, max_k=15):
+        scores = []
+        for k in range(2, max_k+1):
+            kmeans = KMeans(n_clusters=k).fit(embeddings)
+            scores.append(calinski_harabasz_score(embeddings, kmeans.labels_))
+        
+        # return the best k
+        best_k = np.argmax(scores) + 2  # +2 porque empezamos desde k=2
+        return best_k
 
 
     def fetch_questions(self, table_name, rei_id, period):
@@ -125,11 +102,11 @@ class QuestionClusterer:
             if len(corpus_embeddings)<15:
                 maxC=len(corpus_embeddings)
             else:
-                maxC=15
+                maxC=20
 
             scores = []
             for i in range(0,5):
-                score_g, df = QuestionClusterer.optimalK(corpus_embeddings, maxClusters=maxC)
+                score_g, df = QuestionClusterer.select_k(corpus_embeddings, max_k=maxC)
                 scores.append(score_g)
 
             score_g = mode(scores)
@@ -150,8 +127,9 @@ class QuestionClusterer:
 
         corpus = dfcorpus["pregunta"].tolist()
         corpus_embeddings = self.embedder.encode(corpus)
+        embeddings_to_use = self.reducer.fit_transform(corpus_embeddings)
 
-        self.train_cluster_model(corpus_embeddings)
+        self.train_cluster_model(embeddings_to_use)
 
         cluster_assignment = self.clustering_model.labels_
         cluster_assignment = [x + 1 for x in cluster_assignment]
@@ -162,6 +140,4 @@ class QuestionClusterer:
 
         dfcorpus['cluster'] = cluster_assignment
 
-        df_info_reis_pregs = dfcorpus
-
-        return df_info_reis_pregs
+        return dfcorpus
