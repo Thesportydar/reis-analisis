@@ -106,7 +106,7 @@ class QuestionClusterer:
 
             scores = []
             for i in range(0,5):
-                score_g, df = QuestionClusterer.select_k(corpus_embeddings, max_k=maxC)
+                score_g = QuestionClusterer.select_k(corpus_embeddings, max_k=maxC)
                 scores.append(score_g)
 
             score_g = mode(scores)
@@ -134,10 +134,12 @@ class QuestionClusterer:
         cluster_assignment = self.clustering_model.labels_
         cluster_assignment = [x + 1 for x in cluster_assignment]
 
-        clustered_sentences = [[] for i in range(self.num_clusters)]
-        for sentence_id, cluster_id in enumerate(cluster_assignment):
-            clustered_sentences[cluster_id - 1].append(corpus[sentence_id])
+        # clustered_sentences = [[] for i in range(self.num_clusters)]
+        # for sentence_id, cluster_id in enumerate(cluster_assignment):
+        #     clustered_sentences[cluster_id - 1].append(corpus[sentence_id])
 
         dfcorpus['cluster'] = cluster_assignment
 
-        return dfcorpus
+        df_info_reis_pregs = dfcorpus
+
+        return df_info_reis_pregs
