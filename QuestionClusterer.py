@@ -15,7 +15,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-load_dotenv()
+load_dotenv(".env.local")
 DB_PATH = os.getenv("DATABASE_URL", "sqlite.db")
 
 class QuestionClusterer:

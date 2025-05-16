@@ -7,7 +7,7 @@ import logging
 from MailService import send_single_email
 import time
 
-load_dotenv()
+load_dotenv(".env.local")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 

@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO)
-load_dotenv()
+load_dotenv(".env.local")
 API_KEY = os.getenv("MAILGUN_API_KEY", '')
 
 MAILGUN_API_URL = "https://api.mailgun.net/v3/reports.inaqui.me/messages"

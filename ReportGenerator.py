@@ -21,7 +21,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-load_dotenv()
+load_dotenv(".env.local")
 UPLOADS_DIR = os.getenv("UPLOADS_DIR", "/var/lib/reis")
 DB_PATH = os.getenv("DATABASE_URL", "sqlite.db")
 
