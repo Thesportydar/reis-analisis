@@ -24,7 +24,13 @@ class QuestionClusterer:
         self.embedder = SentenceTransformer(embedder_model)
         self.clustering_model = None
         self.num_clusters = num_clusters if num_clusters else None
-        self.reducer = UMAP(n_components=n_components, n_neighbors=n_neighbors, min_dist=min_dist, metric='cosine', repulsion_strength=1.5)
+        self.umap_params = {
+            "n_components": n_components,
+            "n_neighbors": n_neighbors,
+            "min_dist": min_dist,
+            "metric": 'cosine',
+            "repulsion_strength": 1.5
+        }
 
     @staticmethod
     def select_k(embeddings, max_k=15):
@@ -102,7 +108,7 @@ class QuestionClusterer:
             if len(corpus_embeddings)<15:
                 maxC=len(corpus_embeddings)
             else:
-                maxC=20
+                maxC=15
 
             scores = []
             for i in range(0,5):
@@ -121,25 +127,34 @@ class QuestionClusterer:
         dfcorpus = self.preprocess_questions(questions)
 
         if dfcorpus.empty:
-            # add empty cluster column and return
             dfcorpus['cluster'] = None
             return dfcorpus
 
         corpus = dfcorpus["pregunta"].tolist()
+        if len(corpus) < 2:
+            dfcorpus['cluster'] = 1
+            return dfcorpus
+
         corpus_embeddings = self.embedder.encode(corpus)
-        embeddings_to_use = self.reducer.fit_transform(corpus_embeddings)
+        n_samples = len(corpus_embeddings)
+        n_components = min(self.umap_params["n_components"], n_samples - 1)
+        n_neighbors = min(self.umap_params["n_neighbors"], n_samples - 1)
+
+        reducer = UMAP(
+            n_components=n_components,
+            n_neighbors=n_neighbors,
+            min_dist=self.umap_params["min_dist"],
+            metric=self.umap_params["metric"],
+            repulsion_strength=self.umap_params["repulsion_strength"]
+        )
+
+        embeddings_to_use = reducer.fit_transform(corpus_embeddings)
 
         self.train_cluster_model(embeddings_to_use)
 
         cluster_assignment = self.clustering_model.labels_
         cluster_assignment = [x + 1 for x in cluster_assignment]
 
-        # clustered_sentences = [[] for i in range(self.num_clusters)]
-        # for sentence_id, cluster_id in enumerate(cluster_assignment):
-        #     clustered_sentences[cluster_id - 1].append(corpus[sentence_id])
-
         dfcorpus['cluster'] = cluster_assignment
 
-        df_info_reis_pregs = dfcorpus
-
-        return df_info_reis_pregs
+        return dfcorpus
