@@ -34,8 +34,15 @@ class QuestionClusterer:
 
     @staticmethod
     def select_k(embeddings, max_k=15):
+        n_samples = len(embeddings)
+        if n_samples < 3:
+            logging.warning("Muestras insuficientes para seleccionar número óptimo de clusters.")
+            return 1
+
+        effective_max_k = min(max_k, n_samples - 1)
         scores = []
-        for k in range(2, max_k+1):
+
+        for k in range(2, effective_max_k + 1):
             kmeans = KMeans(n_clusters=k).fit(embeddings)
             scores.append(calinski_harabasz_score(embeddings, kmeans.labels_))
         
@@ -105,10 +112,7 @@ class QuestionClusterer:
     def train_cluster_model(self, corpus_embeddings):
 
         if not self.num_clusters:
-            if len(corpus_embeddings)<15:
-                maxC=len(corpus_embeddings)
-            else:
-                maxC=15
+            maxC = min(len(corpus_embeddings) - 1, 15)
 
             scores = []
             for i in range(0,5):
@@ -131,24 +135,15 @@ class QuestionClusterer:
             return dfcorpus
 
         corpus = dfcorpus["pregunta"].tolist()
-        if len(corpus) < 2:
+        if len(corpus) < 3:
             dfcorpus['cluster'] = 1
             return dfcorpus
 
         corpus_embeddings = self.embedder.encode(corpus)
+
+        # if the number of samples is less than 10, we do not reduce the dimensions
         n_samples = len(corpus_embeddings)
-        n_components = min(self.umap_params["n_components"], n_samples - 1)
-        n_neighbors = min(self.umap_params["n_neighbors"], n_samples - 1)
-
-        reducer = UMAP(
-            n_components=n_components,
-            n_neighbors=n_neighbors,
-            min_dist=self.umap_params["min_dist"],
-            metric=self.umap_params["metric"],
-            repulsion_strength=self.umap_params["repulsion_strength"]
-        )
-
-        embeddings_to_use = reducer.fit_transform(corpus_embeddings)
+        embeddings_to_use = self.reducer.fit_transform(corpus_embeddings) if n_samples > 10 else corpus_embeddings
 
         self.train_cluster_model(embeddings_to_use)
 
