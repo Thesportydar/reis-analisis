@@ -76,6 +76,21 @@ class QuestionClusterer:
 
         dfcorpus = pd.DataFrame(questions)
         dfcorpus = dfcorpus.rename(columns={0: "pregunta", 1: "grupo", 2: "lider_name"})
+        
+        initial_count = len(dfcorpus)
+
+        # Filtrar preguntas vacías, None, o solo con espacios en blanco
+        dfcorpus = dfcorpus[dfcorpus["pregunta"].notna()]  # Eliminar None/NaN
+        dfcorpus = dfcorpus[dfcorpus["pregunta"].str.strip() != ""]  # Eliminar strings vacíos o solo espacios
+        dfcorpus = dfcorpus.reset_index(drop=True)  # Resetear índices
+        
+        filtered_count = len(dfcorpus)
+        if initial_count != filtered_count:
+            logging.info(f"Filtered {initial_count - filtered_count} empty questions. Remaining: {filtered_count}")
+        
+        if dfcorpus.empty:
+            logging.warning("No valid questions after filtering empty ones")
+            return pd.DataFrame(columns=["pregunta", "grupo", "lider_name", "votos"])
 
         dfcorpus["votos"] = 1
         corpus = dfcorpus["pregunta"].tolist()
@@ -144,7 +159,7 @@ class QuestionClusterer:
 
         # if the number of samples is less than 10, we do not reduce the dimensions
         n_samples = len(corpus_embeddings)
-        embeddings_to_use = self.reducer.fit_transform(corpus_embeddings) if n_samples > 10 else corpus_embeddings
+        embeddings_to_use = self.reducer.fit_transform(corpus_embeddings) if n_samples > 50 else corpus_embeddings
 
         self.train_cluster_model(embeddings_to_use)
 
