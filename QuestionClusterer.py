@@ -31,6 +31,7 @@ class QuestionClusterer:
             "metric": 'cosine',
             "repulsion_strength": 1.5
         }
+        self.reducer = UMAP(**self.umap_params)
 
     @staticmethod
     def select_k(embeddings, max_k=15):
