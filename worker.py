@@ -39,7 +39,8 @@ def process_task(task):
             send_single_email(
                 os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
                 "Error en Worker REI - Tarea Inválida",
-                f"Error: {error_msg}\nTask data: {task}"
+                f"Error: {error_msg}\nTask data: {task}",
+                use_admin_key=True
             )
             return
 
@@ -72,7 +73,8 @@ def process_task(task):
             send_single_email(
                 os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
                 "Error en Worker REI - Fallo en Procesamiento",
-                f"{error_msg}\n\nDetalles de la tarea:\n{json.dumps(data if class_id else {'raw': str(task)}, indent=2)}"
+                f"{error_msg}\n\nDetalles de la tarea:\n{json.dumps(data if class_id else {'raw': str(task)}, indent=2)}",
+                use_admin_key=True
             )
         except Exception as email_error:
             logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
@@ -97,7 +99,8 @@ if __name__ == '__main__':
                 send_single_email(
                     os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
                     "Worker REI - Pérdida de Conexión Redis",
-                    error_msg
+                    error_msg,
+                    use_admin_key=True
                 )
             except Exception as email_error:
                 logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
@@ -120,7 +123,8 @@ if __name__ == '__main__':
                 send_single_email(
                     os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
                     "Worker REI - Error Crítico",
-                    f"{error_msg}\n\nEl worker continuará procesando otras tareas."
+                    f"{error_msg}\n\nEl worker continuará procesando otras tareas.",
+                    use_admin_key=True
                 )
             except Exception as email_error:
                 logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
