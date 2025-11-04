@@ -45,9 +45,12 @@ def main(rei_id, period, email, score=0):
             report.get('file_path', ''),
             report.get('file_name', '')
         )
+        logging.info(f"Email enviado exitosamente a {email}")
 
     except Exception as e:
-        raise Exception(f"Error enviando correo con reporte adjunto: {str(e)}")
+        # Loguear el error pero no fallar la tarea si el reporte ya se generó
+        logging.error(f"Error enviando correo con reporte adjunto: {str(e)}")
+        logging.warning("El reporte se generó correctamente pero no se pudo enviar por email")
 
 
     return report

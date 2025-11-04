@@ -28,12 +28,19 @@ except redis.exceptions.ConnectionError as e:
 
 
 def process_task(task):
+    class_id = None
     try:
         data = json.loads(task)
         class_id = data.get("class_id")
 
         if not class_id:
-            logging.error("Invalid task: missing class_id")
+            error_msg = "Invalid task: missing class_id"
+            logging.error(error_msg)
+            send_single_email(
+                os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
+                "Error en Worker REI - Tarea Inválida",
+                f"Error: {error_msg}\nTask data: {task}"
+            )
             return
 
         r.set(f"task_status:{class_id}", json.dumps({"status": "in_progress"}))
@@ -49,11 +56,27 @@ def process_task(task):
         logging.info(f"Task for class_id: {class_id} completed")
 
     except Exception as e:
-        r.set(
-            f"task_status:{class_id}",
-            json.dumps({"status": "failed", "error": str(e)}),
-            ex=900 # 15 minutos
-        )
+        error_msg = f"Error procesando tarea para class_id {class_id}: {str(e)}"
+        logging.error(error_msg)
+        logging.exception(e)
+        
+        if class_id:
+            r.set(
+                f"task_status:{class_id}",
+                json.dumps({"status": "failed", "error": str(e)}),
+                ex=900 # 15 minutos
+            )
+        
+        # Enviar notificación al administrador
+        try:
+            send_single_email(
+                os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
+                "Error en Worker REI - Fallo en Procesamiento",
+                f"{error_msg}\n\nDetalles de la tarea:\n{json.dumps(data if class_id else {'raw': str(task)}, indent=2)}"
+            )
+        except Exception as email_error:
+            logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
+        
         raise
 
 if __name__ == '__main__':
@@ -66,7 +89,19 @@ if __name__ == '__main__':
                 process_task(task[1])
 
         except redis.exceptions.ConnectionError as e:
-            logging.error(f"Se perdió la conexión con Redis: {e}. Intentando reconectar...")
+            error_msg = f"Se perdió la conexión con Redis: {e}. Intentando reconectar..."
+            logging.error(error_msg)
+            
+            # Notificar al admin sobre la pérdida de conexión
+            try:
+                send_single_email(
+                    os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
+                    "Worker REI - Pérdida de Conexión Redis",
+                    error_msg
+                )
+            except Exception as email_error:
+                logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
+            
             time.sleep(5)  # Espera antes de intentar reconectar
             r = redis.Redis(
                 host=os.getenv("REDIS_HOST", "redis"),
@@ -76,12 +111,18 @@ if __name__ == '__main__':
             )
 
         except Exception as e:
-            logging.error(f"Error procesando tarea: {e}")
+            error_msg = f"Error inesperado en el worker: {e}"
+            logging.error(error_msg)
             logging.exception(e)
+            
+            # Notificar al admin sobre errores inesperados
+            try:
+                send_single_email(
+                    os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
+                    "Worker REI - Error Crítico",
+                    f"{error_msg}\n\nEl worker continuará procesando otras tareas."
+                )
+            except Exception as email_error:
+                logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
+            
             continue
-            # send_single_email(
-                # os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
-                # "El Worker de REI se ha detenido",
-                # f"Error procesando tarea: {e}"
-            # )
-            # exit(1)
