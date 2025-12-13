@@ -14,8 +14,8 @@ API_KEY = os.getenv("MAILGUN_API_KEY", '')
 # API key para emails administrativos (notificaciones de errores)
 ADMIN_API_KEY = os.getenv("MAILGUN_ADMIN_API_KEY", API_KEY)  # Si no existe, usa la misma que la normal
 
-MAILGUN_API_URL = "https://api.mailgun.net/v3/reports.inaqui.me/messages"
-FROM_EMAIL_ADDRESS = "REI <mailgun@reports.inaqui.me>"
+MAILGUN_API_URL = "https://api.mailgun.net/v3/reis.inaquipaladino.com/messages"
+FROM_EMAIL_ADDRESS = "REI <mailgun@reis.inaquipaladino.com>"
 
 def send_single_email(to_address: str, subject: str, message: str, use_admin_key: bool = False):
     """
