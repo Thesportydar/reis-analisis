@@ -1,4 +1,5 @@
-import sqlite3
+from contextlib import closing
+from db import connect
 import pandas as pd
 import numpy as np
 
@@ -16,7 +17,6 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 load_dotenv(".env.local")
-DB_PATH = os.getenv("DATABASE_URL", "sqlite.db")
 
 class QuestionClusterer:
 
@@ -62,7 +62,7 @@ class QuestionClusterer:
             WHERE c.id = ? AND c.recorrido_id = ?;
         """
 
-        with sqlite3.connect(DB_PATH) as con:
+        with closing(connect()) as con:
             cursor = con.cursor()
             cursor.execute(query, (period, rei_id))
             result = cursor.fetchall()

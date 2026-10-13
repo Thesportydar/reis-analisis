@@ -11,7 +11,8 @@ import nltk
 from nltk.corpus import stopwords
 import os
 from datetime import datetime
-import sqlite3
+from contextlib import closing
+from db import connect
 import uuid
 
 from Constants import FILE_PREFIX, REPORT_PREFIX
@@ -23,7 +24,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 load_dotenv(".env.local")
 UPLOADS_DIR = os.getenv("UPLOADS_DIR", "/var/lib/reis")
-DB_PATH = os.getenv("DATABASE_URL", "sqlite.db")
 
 
 class ReportGenerator:
@@ -300,7 +300,7 @@ class ReportGenerator:
 
         report_id = str(uuid.uuid4())
 
-        with sqlite3.connect(DB_PATH) as conn:
+        with closing(connect()) as conn:
             cursor = conn.cursor()
             cursor.execute(query, (report_id, self.period, original_name, download_url, mime, score))
             conn.commit()
