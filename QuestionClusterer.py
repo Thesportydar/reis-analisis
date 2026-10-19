@@ -53,18 +53,20 @@ class QuestionClusterer:
 
 
     def fetch_questions(self, table_name, rei_id, period):
+        # D13: las preguntas de la sesión son las nacidas en ella (class_id) o trabajadas por última vez en ella (last_class_id).
+        # No se filtra discarded_in: las descartadas siguen entrando al reporte.
         query = f"""
             SELECT question, coalesce(g.id, 'Desconocido') as group_id, coalesce(u.name, 'Desconocido') as lider_name
             FROM {table_name} q
             LEFT JOIN "class" c ON c.id = q.class_id
             LEFT JOIN "group" g ON g.id = q.group_id
             LEFT JOIN "user" u ON u.id = g.lider_id
-            WHERE c.id = ? AND c.recorrido_id = ?;
+            WHERE c.recorrido_id = ? AND (q.class_id = ? OR q.last_class_id = ?);
         """
 
         with closing(connect()) as con:
             cursor = con.cursor()
-            cursor.execute(query, (period, rei_id))
+            cursor.execute(query, (rei_id, period, period))
             result = cursor.fetchall()
             logging.debug(f"Fetched {len(result)} questions from {table_name} for REI ID: {rei_id} and period: {period}")
             return result
