@@ -32,6 +32,8 @@ El archivo `.env` contiene las variables de entorno necesarias para el funcionam
 Sin embargo, si solo vas a realizar tareas de exploración con las notebooks, no es obligatorio configurar estas variables.
 
 ## Uso de las Notebooks
+Las notebooks y sus datos de ejemplo (`ZBE-*.xlsx`) están en `notebooks/`; abrilas desde esa carpeta, porque leen los `.xlsx` con rutas relativas. No se copian a la imagen del worker.
+
 Para cargar preguntas de ejemplo y trabajar con la base de datos, utiliza la notebook `Load_db`. Si no existe una base de datos, esta notebook creará una por defecto.
 
 Luego de cargar la base de datos se pueden explorar los clusters hechos por humanos y visualizar los embeddings dentro de la notebook `Explore_clusters`.
