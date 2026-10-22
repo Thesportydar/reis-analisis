@@ -27,7 +27,7 @@ Este submódulo está diseñado para realizar tareas de análisis dentro de la a
     ```
 
 ## Configuración de Variables de Entorno
-El archivo `.env` contiene las variables de entorno necesarias para el funcionamiento del submódulo. Estas incluyen configuraciones como el host de Redis, la base de datos, y claves API. Asegúrate de revisar y ajustar estas variables según sea necesario.
+El archivo `.env` contiene las variables de entorno necesarias para el funcionamiento del submódulo. Estas incluyen configuraciones como la base de datos, y claves API. Asegúrate de revisar y ajustar estas variables según sea necesario.
 
 Sin embargo, si solo vas a realizar tareas de exploración con las notebooks, no es obligatorio configurar estas variables.
 

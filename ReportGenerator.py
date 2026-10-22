@@ -27,7 +27,8 @@ UPLOADS_DIR = os.getenv("UPLOADS_DIR", "/var/lib/reis")
 
 
 class ReportGenerator:
-    def __init__(self, rei_id, period, df_info_reis_pregs, num_clusters):
+    def __init__(self, rei_id, period, df_info_reis_pregs, num_clusters, report_id=None):
+        self.report_id = report_id
         self.rei_id = rei_id
         self.period = period
         self.df_info_reis_pregs = df_info_reis_pregs
@@ -292,17 +293,27 @@ class ReportGenerator:
             score = 0
 
 
-        # guarda los metadatos en la base de datos
-        query = """
-            INSERT INTO report (id, class_id, fileName, filePath, mime, score)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """
-
-        report_id = str(uuid.uuid4())
-
+        # completa la fila `report` que encoló la app (D14); si no hay fila (ejecución manual) la crea
         with closing(connect()) as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (report_id, self.period, original_name, download_url, mime, score))
+            if self.report_id:
+                cursor.execute(
+                    """
+                    UPDATE report
+                    SET status = 'done', filename = ?, filepath = ?, mime = ?, score = ?, error = NULL,
+                        finished = current_timestamp
+                    WHERE id = ?
+                    """,
+                    (original_name, download_url, mime, score, self.report_id)
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO report (id, class_id, status, filename, filepath, mime, score, finished)
+                    VALUES (?, ?, 'done', ?, ?, ?, ?, current_timestamp)
+                    """,
+                    (str(uuid.uuid4()), self.period, original_name, download_url, mime, score)
+                )
             conn.commit()
 
         return {'file_name': original_name, 'file_path': save_path, 'download_url': download_url, 'mime': mime}

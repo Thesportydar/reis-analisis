@@ -8,7 +8,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def main(rei_id, period, email, score=0):
+def main(rei_id, period, email, score=0, report_id=None):
     # Clusterizar preguntas
     clusterer = QuestionClusterer(score)
 
@@ -28,7 +28,8 @@ def main(rei_id, period, email, score=0):
             rei_id,
             period,
             df_info_reis_pregs,
-            clusterer.num_clusters
+            clusterer.num_clusters,
+            report_id=report_id
         )
         report = report_generator.generate_report()
 

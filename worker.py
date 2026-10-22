@@ -1,132 +1,128 @@
 import os
-import redis
 import json
+import select
+import logging
+from contextlib import closing
 from main import main
 from dotenv import load_dotenv
-import logging
 from MailService import send_single_email
-import time
+from db import connect
 
 load_dotenv(".env.local")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-try:
-    r = redis.Redis(
-        host=os.getenv("REDIS_HOST", "redis"),
-        port=int(os.getenv("REDIS_PORT", 6379)),
-        db=0,
-        socket_timeout=None
-    )
-
-    r.ping()
-    logging.info("Connected to Redis")
-
-except redis.exceptions.ConnectionError as e:
-    logging.error(f"Error connecting to Redis: {str(e)}")
-    exit(1)
+# La cola es la tabla `report` (D14). El FIFO solo despierta al worker: si el aviso se pierde,
+# el chequeo de respaldo (CHECK_INTERVAL) encuentra igual la fila en cola.
+CHECK_INTERVAL = 60
 
 
-def process_task(task):
-    class_id = None
+def wake_path():
+    return f"{os.getenv('DATABASE_URL', 'sqlite.db')}.wake"
+
+
+def open_wake():
+    """Crea el FIFO junto a la DB (si falta) y lo abre lectura/escritura: así nunca ve EOF aunque no haya escritores."""
+    path = wake_path()
+    if not os.path.exists(path):
+        os.mkfifo(path)
+    return os.open(path, os.O_RDWR | os.O_NONBLOCK)
+
+
+def drain(fd):
     try:
-        data = json.loads(task)
-        class_id = data.get("class_id")
+        while os.read(fd, 4096):
+            pass
+    except BlockingIOError:
+        pass
 
-        if not class_id:
-            error_msg = "Invalid task: missing class_id"
-            logging.error(error_msg)
-            send_single_email(
-                os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
-                "Error en Worker REI - Tarea Inválida",
-                f"Error: {error_msg}\nTask data: {task}",
-                use_admin_key=True
-            )
-            return
 
-        r.set(f"task_status:{class_id}", json.dumps({"status": "in_progress"}))
-        logging.info(f"Processing task for class_id: {class_id}")
+def wait_for_wake(fd, timeout=CHECK_INTERVAL):
+    select.select([fd], [], [], timeout)
+    drain(fd)
 
-        result = main(data['recorrido_id'], data['class_id'], data['email'], data['score'])
 
-        r.set(f"task_status:{class_id}", json.dumps({
-                "status": "completed",
-                "download_url": result['download_url'],
-                "file_name": result['file_name']
-        }))
-        logging.info(f"Task for class_id: {class_id} completed")
+def requeue_stale():
+    """Un worker que murió a mitad de un trabajo deja filas `running`: se vuelven a encolar."""
+    with closing(connect()) as conn:
+        cur = conn.execute("UPDATE report SET status = 'queued', started = NULL WHERE status = 'running'")
+        conn.commit()
+        if cur.rowcount:
+            logging.warning(f"{cur.rowcount} trabajo(s) quedaron en curso: se vuelven a encolar")
+
+
+def claim_next():
+    """Toma el trabajo más viejo en cola (atómico). Devuelve (id, class_id, params) o None."""
+    with closing(connect()) as conn:
+        row = conn.execute(
+            """
+            UPDATE report SET status = 'running', started = current_timestamp
+            WHERE id = (SELECT id FROM report WHERE status = 'queued' ORDER BY created, rowid LIMIT 1)
+            RETURNING id, class_id, params
+            """
+        ).fetchone()
+        conn.commit()
+        return row
+
+
+def fail(report_id, error):
+    with closing(connect()) as conn:
+        conn.execute(
+            "UPDATE report SET status = 'failed', error = ?, finished = current_timestamp WHERE id = ?",
+            (error, report_id)
+        )
+        conn.commit()
+
+
+def notify_admin(subject, body):
+    try:
+        send_single_email(os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"), subject, body, use_admin_key=True)
+    except Exception as email_error:
+        logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
+
+
+def process_task(report_id, class_id, params):
+    try:
+        data = json.loads(params) if params else {}
+        logging.info(f"Processing report {report_id} for class_id: {class_id}")
+
+        with closing(connect()) as conn:
+            row = conn.execute("SELECT recorrido_id FROM class WHERE id = ?", (class_id,)).fetchone()
+        if not row:
+            raise Exception(f"La sesión {class_id} no existe")
+
+        main(row[0], class_id, data.get("email"), data.get("score", 0), report_id=report_id)
+        logging.info(f"Report {report_id} for class_id: {class_id} completed")
 
     except Exception as e:
-        error_msg = f"Error procesando tarea para class_id {class_id}: {str(e)}"
+        error_msg = f"Error procesando reporte {report_id} (class_id {class_id}): {str(e)}"
         logging.error(error_msg)
         logging.exception(e)
-        
-        if class_id:
-            r.set(
-                f"task_status:{class_id}",
-                json.dumps({"status": "failed", "error": str(e)}),
-                ex=900 # 15 minutos
-            )
-        
-        # Enviar notificación al administrador
-        try:
-            send_single_email(
-                os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
-                "Error en Worker REI - Fallo en Procesamiento",
-                f"{error_msg}\n\nDetalles de la tarea:\n{json.dumps(data if class_id else {'raw': str(task)}, indent=2)}",
-                use_admin_key=True
-            )
-        except Exception as email_error:
-            logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
-        
-        raise
+        fail(report_id, str(e))
+        notify_admin(
+            "Error en Worker REI - Fallo en Procesamiento",
+            f"{error_msg}\n\nDetalles de la tarea:\n{json.dumps({'report_id': report_id, 'class_id': class_id, 'params': params}, indent=2)}"
+        )
+
+
+def process_pending():
+    while (task := claim_next()):
+        process_task(*task)
+
 
 if __name__ == '__main__':
     print("Worker started...")
 
+    wake_fd = open_wake()
+    requeue_stale()
+
     while True:
         try:
-            task = r.brpop('tasks', timeout=0)
-            if task:
-                process_task(task[1])
-
-        except redis.exceptions.ConnectionError as e:
-            error_msg = f"Se perdió la conexión con Redis: {e}. Intentando reconectar..."
-            logging.error(error_msg)
-            
-            # Notificar al admin sobre la pérdida de conexión
-            try:
-                send_single_email(
-                    os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
-                    "Worker REI - Pérdida de Conexión Redis",
-                    error_msg,
-                    use_admin_key=True
-                )
-            except Exception as email_error:
-                logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
-            
-            time.sleep(5)  # Espera antes de intentar reconectar
-            r = redis.Redis(
-                host=os.getenv("REDIS_HOST", "redis"),
-                port=int(os.getenv("REDIS_PORT", 6379)),
-                db=0,
-                socket_timeout=None
-            )
-
+            process_pending()
+            wait_for_wake(wake_fd)
         except Exception as e:
             error_msg = f"Error inesperado en el worker: {e}"
             logging.error(error_msg)
             logging.exception(e)
-            
-            # Notificar al admin sobre errores inesperados
-            try:
-                send_single_email(
-                    os.getenv("ADMIN_EMAIL", "ipaladinobravo@gmail.com"),
-                    "Worker REI - Error Crítico",
-                    f"{error_msg}\n\nEl worker continuará procesando otras tareas.",
-                    use_admin_key=True
-                )
-            except Exception as email_error:
-                logging.error(f"No se pudo enviar email de notificación al admin: {email_error}")
-            
-            continue
+            notify_admin("Worker REI - Error Crítico", f"{error_msg}\n\nEl worker continuará procesando otras tareas.")
+            wait_for_wake(wake_fd, 5)
