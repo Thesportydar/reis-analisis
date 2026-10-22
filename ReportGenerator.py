@@ -5,6 +5,7 @@ from docx.oxml import parse_xml
 from wordcloud import WordCloud
 import pandas as pd
 import re
+import json
 import distinctipy
 
 import nltk
@@ -27,8 +28,9 @@ UPLOADS_DIR = os.getenv("UPLOADS_DIR", "/var/lib/reis")
 
 
 class ReportGenerator:
-    def __init__(self, rei_id, period, df_info_reis_pregs, num_clusters, report_id=None):
+    def __init__(self, rei_id, period, df_info_reis_pregs, num_clusters, report_id=None, report_data=None):
         self.report_id = report_id
+        self.report_data = report_data
         self.rei_id = rei_id
         self.period = period
         self.df_info_reis_pregs = df_info_reis_pregs
@@ -293,6 +295,8 @@ class ReportGenerator:
             score = 0
 
 
+        data = json.dumps(self.report_data) if self.report_data is not None else None
+
         # completa la fila `report` que encoló la app (D14); si no hay fila (ejecución manual) la crea
         with closing(connect()) as conn:
             cursor = conn.cursor()
@@ -300,19 +304,19 @@ class ReportGenerator:
                 cursor.execute(
                     """
                     UPDATE report
-                    SET status = 'done', filename = ?, filepath = ?, mime = ?, score = ?, error = NULL,
+                    SET status = 'done', filename = ?, filepath = ?, mime = ?, score = ?, data = ?, error = NULL,
                         finished = current_timestamp
                     WHERE id = ?
                     """,
-                    (original_name, download_url, mime, score, self.report_id)
+                    (original_name, download_url, mime, score, data, self.report_id)
                 )
             else:
                 cursor.execute(
                     """
-                    INSERT INTO report (id, class_id, status, filename, filepath, mime, score, finished)
-                    VALUES (?, ?, 'done', ?, ?, ?, ?, current_timestamp)
+                    INSERT INTO report (id, class_id, status, filename, filepath, mime, score, data, finished)
+                    VALUES (?, ?, 'done', ?, ?, ?, ?, ?, current_timestamp)
                     """,
-                    (str(uuid.uuid4()), self.period, original_name, download_url, mime, score)
+                    (str(uuid.uuid4()), self.period, original_name, download_url, mime, score, data)
                 )
             conn.commit()
 

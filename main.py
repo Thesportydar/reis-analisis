@@ -1,5 +1,6 @@
 from QuestionClusterer import QuestionClusterer
 from ReportGenerator import ReportGenerator
+from report_data import build_report_data
 import sys
 import json
 from MailService import send_email_with_attachment
@@ -22,6 +23,9 @@ def main(rei_id, period, email, score=0, report_id=None):
     logging.debug(f"Preguntas dx clusterizadas: {df_info_reis_pregs}")
 
 
+    # Contrato report.data (IDs de las preguntas por tema y casi iguales, ver report_data.py)
+    report_data = build_report_data(df_info_reis_pregs, clusterer.embedder_name, clusterer.num_clusters)
+
     # Generar reporte
     try:
         report_generator = ReportGenerator(
@@ -29,7 +33,8 @@ def main(rei_id, period, email, score=0, report_id=None):
             period,
             df_info_reis_pregs,
             clusterer.num_clusters,
-            report_id=report_id
+            report_id=report_id,
+            report_data=report_data
         )
         report = report_generator.generate_report()
 

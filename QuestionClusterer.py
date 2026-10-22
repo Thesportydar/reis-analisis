@@ -21,6 +21,7 @@ load_dotenv(".env.local")
 class QuestionClusterer:
 
     def __init__(self, num_clusters, embedder_model='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', n_components=10, n_neighbors=15, min_dist=0.1):
+        self.embedder_name = embedder_model
         self.embedder = SentenceTransformer(embedder_model)
         self.clustering_model = None
         self.num_clusters = num_clusters if num_clusters else None
@@ -56,7 +57,7 @@ class QuestionClusterer:
         # D13: las preguntas de la sesión son las nacidas en ella (class_id) o trabajadas por última vez en ella (last_class_id).
         # No se filtra discarded_in: las descartadas siguen entrando al reporte.
         query = f"""
-            SELECT question, coalesce(g.id, 'Desconocido') as group_id, coalesce(u.name, 'Desconocido') as lider_name
+            SELECT q.id, question, coalesce(g.id, 'Desconocido') as group_id, coalesce(u.name, 'Desconocido') as lider_name
             FROM {table_name} q
             LEFT JOIN "class" c ON c.id = q.class_id
             LEFT JOIN "group" g ON g.id = q.group_id
@@ -72,12 +73,36 @@ class QuestionClusterer:
             return result
 
 
+    @staticmethod
+    def resolve_dup_ids(ids, matches):
+        """Ids de las casi iguales que cada fila representante se lleva (para report.data).
+
+        La similitud no es transitiva: una pregunta puede coincidir con otra que a su vez fue descartada por una
+        anterior. Cada descartada se asigna a la primera que la reclama y se sigue la cadena hasta una representante,
+        así ninguna pregunta se pierde. Una fila es representante si nadie anterior la reclama.
+        """
+        parent = {}
+        for i, js in enumerate(matches):
+            for j in js:
+                if j > i and j not in parent:
+                    parent[j] = i
+
+        def root(x):
+            while x in parent:
+                x = parent[x]
+            return x
+
+        dups = [[] for _ in ids]
+        for j in sorted(parent):
+            dups[root(j)].append(ids[j])
+        return dups
+
     def preprocess_questions(self, questions):
         if not questions:
-            return pd.DataFrame(columns=["pregunta", "grupo", "lider_name", "votos"])
+            return pd.DataFrame(columns=["id", "pregunta", "grupo", "lider_name", "votos", "dup_ids"])
 
         dfcorpus = pd.DataFrame(questions)
-        dfcorpus = dfcorpus.rename(columns={0: "pregunta", 1: "grupo", 2: "lider_name"})
+        dfcorpus = dfcorpus.rename(columns={0: "id", 1: "pregunta", 2: "grupo", 3: "lider_name"})
         
         initial_count = len(dfcorpus)
 
@@ -92,7 +117,7 @@ class QuestionClusterer:
         
         if dfcorpus.empty:
             logging.warning("No valid questions after filtering empty ones")
-            return pd.DataFrame(columns=["pregunta", "grupo", "lider_name", "votos"])
+            return pd.DataFrame(columns=["id", "pregunta", "grupo", "lider_name", "votos", "dup_ids"])
 
         dfcorpus["votos"] = 1
         corpus = dfcorpus["pregunta"].tolist()
@@ -101,6 +126,8 @@ class QuestionClusterer:
         # Compute cosine similarities
         similarities = self.embedder.similarity(corpus_embeddings, corpus_embeddings)
         to_remove = []
+        # índices de las preguntas casi iguales a cada una (para report.data; el .docx no los usa)
+        matches = [[] for _ in corpus]
 
         for idx_i, sentence1 in enumerate(corpus):
             count_matches = 0
@@ -111,6 +138,7 @@ class QuestionClusterer:
 
                 if (sim > 0.9) and (idx_i != idx_j):
                     count_matches += 1
+                    matches[idx_i].append(idx_j)
                     gxj = dfcorpus['grupo'].iloc[idx_j]
                     match_groups = match_groups + "," + gxj
 
@@ -119,6 +147,8 @@ class QuestionClusterer:
 
             dfcorpus.iloc[idx_i, dfcorpus.columns.get_loc('votos')] = count_matches + 1
             dfcorpus.iloc[idx_i, dfcorpus.columns.get_loc('grupo')] = str(match_groups)
+
+        dfcorpus['dup_ids'] = QuestionClusterer.resolve_dup_ids(dfcorpus['id'].tolist(), matches)
 
         if len(to_remove)>0:
             rm_indexes = np.array(to_remove)
